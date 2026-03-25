@@ -1,0 +1,41 @@
+{
+  "date": "2026-03-25",
+  "entries": [
+    {
+      "id": "a1b2c3d4",
+      "timestamp": "2026-03-25T09:15:00",
+      "project": "MAC-M2M-Assistant",
+      "commitHash": "1a2da74",
+      "commitMessage": "fix: Upgrade SQL retry to 2 attempts with better error context",
+      "diff": "diff --git a/azure-functions/m2m-query/index.js b/azure-functions/m2m-query/index.js\nindex 8a3f1c2..b7d4e5f 100644\n--- a/azure-functions/m2m-query/index.js\n+++ b/azure-functions/m2m-query/index.js\n@@ -686,6 +686,33 @@\n+    // Build correction context with the exact error and failed SQL\n+    // Build error-specific correction guidance\n+    let fixGuidance = '';\n+    const errMsg = sqlErr.message || '';\n+    if (/Incorrect syntax near/i.test(errMsg)) {\n+      const near = errMsg.match(/near '([^']+)'/i);\n+      fixGuidance = `This is a SQL SYNTAX error near '${near ? near[1] : '?'}'. Common causes:\\n` +\n+        '- Missing comma between columns in SELECT\\n' +\n+        '- Unmatched parentheses in function calls like DATEADD()\\n' +\n+        '- Backslash \\\\ characters (SQL Server does not use backslash escaping)\\n' +\n+        '- Missing space between keywords\\n' +\n+        'Rewrite the query from scratch with correct syntax.';\n+    }",
+      "filesChanged": ["azure-functions/m2m-query/index.js"],
+      "author": "Jimenez",
+      "reviewed": false,
+      "notes": ""
+    },
+    {
+      "id": "e5f6g7h8",
+      "timestamp": "2026-03-25T10:30:00",
+      "project": "MAC-M2M-Assistant",
+      "commitHash": "3c4d5e6",
+      "commitMessage": "feat: Add retry delay with exponential backoff for SQL queries",
+      "diff": "diff --git a/azure-functions/m2m-query/index.js b/azure-functions/m2m-query/index.js\n--- a/azure-functions/m2m-query/index.js\n+++ b/azure-functions/m2m-query/index.js\n@@ -710,3 +710,15 @@\n+    // Exponential backoff: wait before retrying\n+    // attempt 1 = 1000ms, attempt 2 = 2000ms, etc.\n+    const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);\n+    await new Promise(resolve => setTimeout(resolve, delay));\n+\n+    context.log(`Retrying SQL query (attempt ${attempt + 1}) after ${delay}ms...`);",
+      "filesChanged": ["azure-functions/m2m-query/index.js"],
+      "author": "Jimenez",
+      "reviewed": false,
+      "notes": ""
+    },
+    {
+      "id": "i9j0k1l2",
+      "timestamp": "2026-03-25T14:22:00",
+      "project": "MAC-M2M-Assistant",
+      "commitHash": "7f8g9h0",
+      "commitMessage": "refactor: Extract SQL error parser into utility function",
+      "diff": "diff --git a/azure-functions/shared/sql-utils.js b/azure-functions/shared/sql-utils.js\nnew file mode 100644\n--- /dev/null\n+++ b/azure-functions/shared/sql-utils.js\n@@ -0,0 +1,28 @@\n+/**\n+ * parseSqlError - Extracts structured info from SQL Server error messages\n+ * @param {Error} err - The caught SQL error\n+ * @returns {Object} Parsed error with type, location, and suggestion\n+ */\n+function parseSqlError(err) {\n+  const msg = err.message || '';\n+  const result = { raw: msg, type: 'unknown', near: null, suggestion: '' };\n+\n+  if (/Incorrect syntax near/i.test(msg)) {\n+    result.type = 'syntax';\n+    const match = msg.match(/near '([^']+)'/i);\n+    result.near = match ? match[1] : null;\n+    result.suggestion = 'Check for missing commas, unmatched parens, or invalid escaping.';\n+  } else if (/Invalid column name/i.test(msg)) {\n+    result.type = 'column';\n+    const match = msg.match(/column name '([^']+)'/i);\n+    result.near = match ? match[1] : null;\n+    result.suggestion = 'Verify the column exists in the table schema.';\n+  }\n+\n+  return result;\n+}\n+\n+module.exports = { parseSqlError };",
+      "filesChanged": ["azure-functions/shared/sql-utils.js"],
+      "author": "Jimenez",
+      "reviewed": false,
+      "notes": ""
+    }
+  ]
+}
