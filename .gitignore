@@ -8,3 +8,4 @@ dist-ssr
 .vscode/*
 !.vscode/extensions.json
 .env
+.tracker-env.ps1

@@ -5,6 +5,9 @@ $watchPaths = @(
     "c:\Users\ajimenez\Downloads\MAC-M2M-Assistant"
 )
 
+# Load local env if it exists (keys kept out of git)
+$envFile = Join-Path $PSScriptRoot ".tracker-env.ps1"
+if (Test-Path $envFile) { . $envFile }
 $supabaseUrl = $env:SUPABASE_URL
 $supabaseKey = $env:SUPABASE_SERVICE_KEY
 $diffContextLines = 5
@@ -94,16 +97,19 @@ function Get-LatestCommitInfo {
         $short   = git log -1 --format="%h" 2>$null
         $msg     = git log -1 --format="%s" 2>$null
         $auth    = git log -1 --format="%an" 2>$null
-        $files   = git diff-tree --no-commit-id --name-only -r HEAD 2>$null
-        $diff    = git diff HEAD~1 HEAD --unified=$diffContextLines 2>$null
-        if (-not $diff) { $diff = git show HEAD --format="" --unified=$diffContextLines 2>$null }
+        $filesRaw = git diff-tree --no-commit-id --name-only -r HEAD 2>$null
+        $diffRaw  = git diff HEAD~1 HEAD --unified=$diffContextLines 2>$null
+        if (-not $diffRaw) { $diffRaw = git show HEAD --format="" --unified=$diffContextLines 2>$null }
+        # Pipe through Out-String to get a single string with real newlines preserved
+        $diffStr = if ($diffRaw) { ($diffRaw | Out-String).TrimEnd() } else { "(no diff available)" }
+        $filesArr = if ($filesRaw -is [array]) { $filesRaw } elseif ($filesRaw) { @($filesRaw) } else { @() }
         return @{
             Hash    = $hash
             Short   = $short
             Message = $msg
             Author  = $auth
-            Files   = if ($files) { $files -split "`n" } else { @() }
-            Diff    = if ($diff) { $diff } else { "(no diff available)" }
+            Files   = $filesArr
+            Diff    = $diffStr
         }
     } finally { Pop-Location }
 }
